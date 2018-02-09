@@ -1,0 +1,17 @@
+---
+- name: Init task
+  hosts: all
+  sudo: yes
+  vars_files:
+    - conf.yml
+  roles:
+    - init
+
+- name: Create WEB Application Servers
+  hosts: webservers
+  sudo: yes
+  vars_files:
+    - conf.yml
+  roles:
+    - apache
+    - php

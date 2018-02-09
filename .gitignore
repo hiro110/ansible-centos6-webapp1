@@ -1,0 +1,6 @@
+.vscode/
+ansible.cfg
+conf.yml
+hosts
+library
+site.retry

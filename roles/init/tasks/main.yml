@@ -1,0 +1,48 @@
+---
+# init/tasks/main.yml
+# common
+
+- name: Install libselinux-python
+  yum: name=libselinux-python state=present
+- name: Disabled SELinux
+  selinux: state=disabled
+
+- name: Set Timezone to Asia/Tokyo
+  timezone:
+    name: Asia/Tokyo
+
+- name: Change locale
+  replace: dest=/etc/sysconfig/i18n regexp='^LANG=' replace='LANG=ja_JP.utf8' backup=yes
+
+- name: Change Keyboard Map
+  replace: dest=/etc/sysconfig/keyboard regexp='^KEYTABLE=' replace='KEYTABLE="jp106"' backup=yes
+  replace: dest=/etc/sysconfig/keyboard regexp='^MODEL=' replace='MODEL="jp106"'
+  replace: dest=/etc/sysconfig/keyboard regexp='^LAYOUT=' replace='LAYOUT="jp"'
+  replace: dest=/etc/sysconfig/keyboard regexp='^KEYBOARDTYPE=' replace='KEYBOARDTYPE="pc"'
+
+- name: Show timestamp to history
+  lineinfile: dest=/etc/sysconfig/i18n line="HISTTIMEFORMAT='%Y-%m-%d %T%z '" backup=yes
+
+- name: Make Swap File
+  lineinfile: dest=/etc/waagent.conf regexp="^ResourceDisk.EnableSwap=n" line="ResourceDisk.EnableSwap=y" backup=yes
+  lineinfile: dest=/etc/waagent.conf regexp="^ResourceDisk.SwapSizeMB=0" line="ResourceDisk.SwapSizeMB=4096"
+
+  # Create general user
+#- name: Create home directory
+#  file: path=/srv/www state=directory owner=root group=root mode=0755
+- name: Create a New General user
+#  user: name={{ developer_id }} generate_ssh_key=yes ssh_key_type=rsa ssh_key_file=.ssh/id_rsa home=/srv/www/{{ developer_id }}
+  user: name={{ developer_id }} generate_ssh_key=yes ssh_key_type=rsa ssh_key_file=.ssh/id_rsa
+- name: Rename Publick Key
+  shell: creates=/home/{{ developer_id }}/.ssh/authorized_keys mv /home/{{ developer_id }}/.ssh/id_rsa.pub /home/{{ developer_id }}/.ssh/authorized_keys
+- name: Change Permission Publick Key
+  file: path=/home/{{ developer_id }}/.ssh/authorized_keys mode=0600
+
+  # Setting sshd_config 
+#- name: Backup Origin config
+#  shell: creates=/etc/ssh/sshd_config.org cp /etc/ssh/sshd_config /etc/ssh/sshd_config.org
+#- name: Disallow root SSH access
+#  lineinfile: dest=/etc/ssh/sshd_config regexp="^#PermitRootLogin " line="PermitRootLogin no" state=present validate="sshd -T -f %s"
+
+- name: Packages update
+  yum: name=* state=latest

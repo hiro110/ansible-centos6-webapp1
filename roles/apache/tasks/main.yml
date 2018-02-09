@@ -1,0 +1,81 @@
+---
+# tasks/main.yml
+# apache
+  # Install Apache
+- name: Install Apache
+  yum: name=httpd state=present
+
+  # Setup httpd
+- name: Copy httpd.conf
+  template: src={{ item.src }} dest={{ item.dest}} owner=root group=root mode=0644
+  with_items:
+  - { src: security.conf, dest: /etc/httpd/conf.d/security.conf }
+  - { src: mackerel.conf, dest: /etc/httpd/conf.d/mackerel.conf }
+  - { src: ssl.prod.vhost.conf, dest: /etc/httpd/conf.d/prod.vhost.conf}
+  - { src: ssl.test.vhost.conf, dest: /etc/httpd/conf.d/test.vhost.conf}
+
+  # Delete unnecessary settings
+- name: Replace ServerToken and ServerSignature Setting
+  lineinfile: dest=/etc/httpd/conf/httpd.conf state=present backrefs=yes regexp={{ item.regexp }} line={{ item.line }} backup=yes
+  with_items:
+  - { regexp: '^#?\s*ServerTokens', line: 'ServerTokens Prod' }
+  - { regexp: '^#?\s*Alias /icons/', line: '#Alias /icons/ "/var/www/icons/"' }  
+  - { regexp: '^#?\s*Alias /error/', line: '#Alias /error/ "/var/www/error/"' }
+  - { regexp: '^#?\s*ScriptAlias', line: '#ScriptAlias /cgi-bin/ "/var/www/cgi-bin/"' }
+- name: Delete unnecessary files
+  shell: create=/etc/httpd/conf.d/autoindex.conf cp /dev/null /etc/httpd/conf.d/autoindex.conf
+  shell: create=/etc/httpd/conf.d/welcome.conf cp /dev/null /etc/httpd/conf.d/welcome.conf
+
+  # Create Project directory 
+- name: Create Directory for Documentroot
+  file: path={{ item.dir }} state=directory recurse=yes owner={{ item.owner }} group={{ item.group }} mode=0755
+  with_items:
+  - { dir: '/home/www/{{ prod_domain }}/contents/htdocs', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ prod_domain }}/logs', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ prod_domain }}/data', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ prod_domain }}/etc', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ test_domain }}/contents/htdocs', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ test_domain }}/logs', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ test_domain }}/data', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dir: '/home/www/{{ test_domain }}/etc', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+
+  # Setup vhost.conf
+- name: Replace vhost.conf
+  replace: dest={{ item.vhostpath }} regexp={{ item.regexp }} replace={{ item.replace }}
+  with_items:
+  - { vhostpath: '/etc/httpd/conf.d/security.conf', regexp: '\${prod}', replace: '{{ prod_domain }}' }
+  - { vhostpath: '/etc/httpd/conf.d/security.conf', regexp: '\${test}', replace: '{{ test_domain }}' }
+  - { vhostpath: '/etc/httpd/conf.d/prod.vhost.conf', regexp: '\${prod}', replace: '{{ prod_domain }}' }
+  - { vhostpath: '/etc/httpd/conf.d/prod.vhost.conf', regexp: '\${vh-port}', replace: '{{ vh_port }}' }
+  - { vhostpath: '/etc/httpd/conf.d/prod.vhost.conf', regexp: '\${developer_id}', replace: '{{ developer_id }}' }
+  - { vhostpath: '/etc/httpd/conf.d/test.vhost.conf', regexp: '\${test}', replace: '{{ test_domain }}' }
+  - { vhostpath: '/etc/httpd/conf.d/test.vhost.conf', regexp: '\${vh-port}', replace: '{{ vh_port }}' }
+  - { vhostpath: '/etc/httpd/conf.d/test.vhost.conf', regexp: '\${developer_id}', replace: '{{ developer_id }}' }
+- name: Set symlink for vhost.conf
+  file: src={{ item.src }} dest={{ item.dest }} state=link
+  with_items:
+  - { src: /etc/httpd/conf.d/prod.vhost.conf, dest: '/home/www/{{ prod_domain }}/etc/prod.vhost.conf' }
+  - { src: /etc/httpd/conf.d/test.vhost.conf, dest: '/home/www/{{ test_domain }}/etc/test.vhost.conf' }
+- name: Copy .htaccess file
+  template: src={{ item.srcfile }} dest={{ item.dstfile }} owner={{ item.owner }} group={{ item.group }} mode=0755
+  with_items:
+  - { srcfile: test.htaccess, dstfile: '/home/www/{{ test_domain }}/contents/htdocs/.htaccess', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+- name: Replace .htaccess
+  replace: dest={{ item.htaccesspath }} regexp={{ item.regexp }} replace={{ item.replace }}
+  with_items:
+  - { htaccesspath: '/home/www/{{ test_domain }}/contents/htdocs/.htaccess', regexp: '\${test}', replace: '{{ test_domain }}' }
+  - { htaccesspath: '/home/www/{{ test_domain }}/contents/htdocs/.htaccess', regexp: '\${developer_id}', replace: '{{ developer_id }}' }
+- name: Copy Sample index.html
+  template: src=index.html dest={{ item.dst }} owner={{ item.owner }} group={{ item.group }} mode=0755
+  with_items:
+  - { dst: '/home/www/{{ prod_domain }}/contents/htdocs/index.html', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+  - { dst: '/home/www/{{ test_domain }}/contents/htdocs/index.html', owner: '{{ developer_id }}', group: '{{ developer_id }}' }
+- name: Set Basic Auth
+  command: htpasswd -c -b /home/www/{{ item.domain }}/etc/.htpasswd {{ item.basic_id }} {{ item.basic_pass }}
+  with_items:
+#  - { domain: '{{ prod_domain }}', basic_id: '{{ prod_basic_id }}', basic_pass: '{{ prod_basic_pass }}' }
+  - { domain: '{{ test_domain }}', basic_id: '{{ test_basic_id }}', basic_pass: '{{ test_basic_pass }}' }
+
+  # Finish
+- name: Start apache
+  service: name=httpd state=started enabled=yes

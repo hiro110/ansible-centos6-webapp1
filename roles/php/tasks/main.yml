@@ -1,0 +1,39 @@
+---
+# php/tasks/main.yml
+# PHP
+- name: Install remi repojsitory
+  yum: name=http://rpms.famillecollet.com/enterprise/remi-release-6.rpm state=present
+
+- name: Install php
+  yum: name={{ item }} enablerepo=remi-php56   state=present
+  with_items:
+    - php
+    - php-cli
+    - php-common
+    - php-dbg
+    - php-devel
+    - php-gd
+    - php-mbstring
+    - php-mcrypt
+    - php-mysqlnd
+    - php-opcache
+    - php-xml
+
+  # Setup php.ini 
+- name: Backup Origin config
+  command: cp /etc/php.ini /etc/php.ini.org
+- name: Copy config file
+  template: src=php.ini dest=/etc/php.ini
+- name: Edit php.ini
+  lineinfile: dest=/etc/php.ini backrefs=yes regexp={{ item.regexp }} line={{ item.line }} backup=yes
+  with_items:
+    - { regexp: '^;(date.timezone) =.*', line: '\1 = Asia/Tokyo' }
+    - { regexp: '^;(mbstring.language) =.*', line: '\1 = Japanese' }
+    - { regexp: '^;(mbstring.internal_encoding) =.*', line: '\1 = UTF-8' }
+    - { regexp: '^;(mbstring.http_input) =.*', line: '\1 = pass' }
+    - { regexp: '^;(mbstring.http_output) =.*', line: '\1 = pass' }
+    - { regexp: '^;(mbstring.encoding_translation) =.*', line: '\1 = off' }
+
+  # Finish
+- name: Restart apache
+  service: name=httpd state=restarted enabled=yes
